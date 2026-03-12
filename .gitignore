@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+*.class
+
+# IntelliJ / IDE
+.idea/
+*.iml
+.vscode/
+
+# Kotlin
+*.kotlin_module
+
+# Node
+web/node_modules/
+web/dist/
+
+# Logs
+*.log
+
+# Environment — never commit secrets
+.env
+application-local.conf

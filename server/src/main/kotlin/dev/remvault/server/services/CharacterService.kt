@@ -11,13 +11,13 @@ object CharacterService {
 
     // ── In-memory stores ───────────────────────────────────────────────────
 
-    private val characters  = mutableMapOf<String, Character>()
-    private val stats       = mutableMapOf<String, Stats>()
-    private val hitPoints   = mutableMapOf<String, HitPoints>()
-    private val deathSaves  = mutableMapOf<String, DeathSaves>()
-    private val skills      = mutableMapOf<String, MutableList<SkillProficiency>>()
-    private val spellSlots  = mutableMapOf<String, MutableList<SpellSlot>>()
-    private val inventory   = mutableMapOf<String, MutableList<InventoryEntry>>()
+    private val characters = mutableMapOf<String, Character>()
+    private val stats = mutableMapOf<String, Stats>()
+    private val hitPoints = mutableMapOf<String, HitPoints>()
+    private val deathSaves = mutableMapOf<String, DeathSaves>()
+    private val skills = mutableMapOf<String, MutableList<SkillProficiency>>()
+    private val spellSlots = mutableMapOf<String, MutableList<SpellSlot>>()
+    private val inventory = mutableMapOf<String, MutableList<InventoryEntry>>()
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -37,38 +37,38 @@ object CharacterService {
         // Roll stats via DiceService
         val rolled = DiceService.rollStatBlock()
         val charStats = Stats(
-            characterId  = id,
-            strength     = rolled.strength,
-            dexterity    = rolled.dexterity,
+            characterId = id,
+            strength = rolled.strength,
+            dexterity = rolled.dexterity,
             constitution = rolled.constitution,
             intelligence = rolled.intelligence,
-            wisdom       = rolled.wisdom,
-            charisma     = rolled.charisma
+            wisdom = rolled.wisdom,
+            charisma = rolled.charisma
         )
 
         // Calculate HP via RulesEngine
         val hitDie = RulesEngine.hitDie(characterClass)
-        val maxHp  = RulesEngine.maxHitPoints(1, hitDie, charStats.constitution)
+        val maxHp = RulesEngine.maxHitPoints(1, hitDie, charStats.constitution)
 
         val character = Character(
-            id             = id,
-            userId         = userId,
-            campaignId     = campaignId,
-            name           = name,
-            race           = race,
-            subrace        = subrace,
+            id = id,
+            userId = userId,
+            campaignId = campaignId,
+            name = name,
+            race = race,
+            subrace = subrace,
             characterClass = characterClass,
-            subclass       = subclass,
-            level          = 1,
-            background     = background,
-            alignment      = alignment,
-            status         = CharacterStatus.ALIVE
+            subclass = subclass,
+            level = 1,
+            background = background,
+            alignment = alignment,
+            status = CharacterStatus.ALIVE
         )
 
         val hp = HitPoints(
-            characterId  = id,
-            maximum      = maxHp,
-            current      = maxHp,
+            characterId = id,
+            maximum = maxHp,
+            current = maxHp,
             hitDiceTotal = 1
         )
 
@@ -76,12 +76,12 @@ object CharacterService {
         val defaultSkills = defaultSkillList(id)
 
         characters[id] = character
-        stats[id]      = charStats
-        hitPoints[id]  = hp
+        stats[id] = charStats
+        hitPoints[id] = hp
         deathSaves[id] = DeathSaves(characterId = id)
-        skills[id]     = defaultSkills.toMutableList()
+        skills[id] = defaultSkills.toMutableList()
         spellSlots[id] = mutableListOf()
-        inventory[id]  = mutableListOf()
+        inventory[id] = mutableListOf()
 
         return buildSheet(character, charStats, hp)
     }
@@ -91,7 +91,7 @@ object CharacterService {
     fun getCharacter(characterId: String): CharacterSheet? {
         val character = characters[characterId] ?: return null
         val charStats = stats[characterId] ?: return null
-        val hp        = hitPoints[characterId] ?: return null
+        val hp = hitPoints[characterId] ?: return null
         return buildSheet(character, charStats, hp)
     }
 
@@ -129,12 +129,12 @@ object CharacterService {
             throw IllegalAccessException("You don't own this character")
 
         val updated = character.copy(
-            name             = name ?: character.name,
-            alignment        = alignment ?: character.alignment,
-            subclass         = subclass ?: character.subclass,
+            name = name ?: character.name,
+            alignment = alignment ?: character.alignment,
+            subclass = subclass ?: character.subclass,
             experiencePoints = experiencePoints ?: character.experiencePoints,
             // Auto level-up based on XP
-            level            = experiencePoints
+            level = experiencePoints
                 ?.let { RulesEngine.levelFromXp(it) }
                 ?: character.level
         )
@@ -169,49 +169,59 @@ object CharacterService {
         hp: HitPoints
     ): CharacterSheet {
         val level = character.level
-        val prof  = RulesEngine.proficiencyBonus(level)
+        val prof = RulesEngine.proficiencyBonus(level)
 
         return CharacterSheet(
-            character         = character,
-            stats             = charStats,
-            hitPoints         = hp,
-            proficiencyBonus  = prof,
-            strModifier       = RulesEngine.modifier(charStats.strength),
-            dexModifier       = RulesEngine.modifier(charStats.dexterity),
-            conModifier       = RulesEngine.modifier(charStats.constitution),
-            intModifier       = RulesEngine.modifier(charStats.intelligence),
-            wisModifier       = RulesEngine.modifier(charStats.wisdom),
-            chaModifier       = RulesEngine.modifier(charStats.charisma),
+            character = character,
+            stats = charStats,
+            hitPoints = hp,
+            proficiencyBonus = prof,
+            strModifier = RulesEngine.modifier(charStats.strength),
+            dexModifier = RulesEngine.modifier(charStats.dexterity),
+            conModifier = RulesEngine.modifier(charStats.constitution),
+            intModifier = RulesEngine.modifier(charStats.intelligence),
+            wisModifier = RulesEngine.modifier(charStats.wisdom),
+            chaModifier = RulesEngine.modifier(charStats.charisma),
             passivePerception = RulesEngine.passivePerception(charStats.wisdom, level, false),
-            carryingCapacity  = RulesEngine.carryingCapacity(charStats.strength),
-            skills            = skills[character.id] ?: emptyList(),
-            spellSlots        = spellSlots[character.id] ?: emptyList(),
-            inventory         = inventory[character.id] ?: emptyList()
+            carryingCapacity = RulesEngine.carryingCapacity(charStats.strength),
+            skills = skills[character.id] ?: emptyList(),
+            spellSlots = spellSlots[character.id] ?: emptyList(),
+            inventory = inventory[character.id] ?: emptyList()
         )
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private fun defaultSkillList(characterId: String) = listOf(
-        SkillProficiency(characterId, "Acrobatics",      "dexterity",    Proficiency.NONE),
-        SkillProficiency(characterId, "Animal Handling", "wisdom",       Proficiency.NONE),
-        SkillProficiency(characterId, "Arcana",          "intelligence", Proficiency.NONE),
-        SkillProficiency(characterId, "Athletics",       "strength",     Proficiency.NONE),
-        SkillProficiency(characterId, "Deception",       "charisma",     Proficiency.NONE),
-        SkillProficiency(characterId, "History",         "intelligence", Proficiency.NONE),
-        SkillProficiency(characterId, "Insight",         "wisdom",       Proficiency.NONE),
-        SkillProficiency(characterId, "Intimidation",    "charisma",     Proficiency.NONE),
-        SkillProficiency(characterId, "Investigation",   "intelligence", Proficiency.NONE),
-        SkillProficiency(characterId, "Medicine",        "wisdom",       Proficiency.NONE),
-        SkillProficiency(characterId, "Nature",          "intelligence", Proficiency.NONE),
-        SkillProficiency(characterId, "Perception",      "wisdom",       Proficiency.NONE),
-        SkillProficiency(characterId, "Performance",     "charisma",     Proficiency.NONE),
-        SkillProficiency(characterId, "Persuasion",      "charisma",     Proficiency.NONE),
-        SkillProficiency(characterId, "Religion",        "intelligence", Proficiency.NONE),
-        SkillProficiency(characterId, "Sleight of Hand", "dexterity",    Proficiency.NONE),
-        SkillProficiency(characterId, "Stealth",         "dexterity",    Proficiency.NONE),
-        SkillProficiency(characterId, "Survival",        "wisdom",       Proficiency.NONE),
+        SkillProficiency(characterId, "Acrobatics", "dexterity", Proficiency.NONE),
+        SkillProficiency(characterId, "Animal Handling", "wisdom", Proficiency.NONE),
+        SkillProficiency(characterId, "Arcana", "intelligence", Proficiency.NONE),
+        SkillProficiency(characterId, "Athletics", "strength", Proficiency.NONE),
+        SkillProficiency(characterId, "Deception", "charisma", Proficiency.NONE),
+        SkillProficiency(characterId, "History", "intelligence", Proficiency.NONE),
+        SkillProficiency(characterId, "Insight", "wisdom", Proficiency.NONE),
+        SkillProficiency(characterId, "Intimidation", "charisma", Proficiency.NONE),
+        SkillProficiency(characterId, "Investigation", "intelligence", Proficiency.NONE),
+        SkillProficiency(characterId, "Medicine", "wisdom", Proficiency.NONE),
+        SkillProficiency(characterId, "Nature", "intelligence", Proficiency.NONE),
+        SkillProficiency(characterId, "Perception", "wisdom", Proficiency.NONE),
+        SkillProficiency(characterId, "Performance", "charisma", Proficiency.NONE),
+        SkillProficiency(characterId, "Persuasion", "charisma", Proficiency.NONE),
+        SkillProficiency(characterId, "Religion", "intelligence", Proficiency.NONE),
+        SkillProficiency(characterId, "Sleight of Hand", "dexterity", Proficiency.NONE),
+        SkillProficiency(characterId, "Stealth", "dexterity", Proficiency.NONE),
+        SkillProficiency(characterId, "Survival", "wisdom", Proficiency.NONE),
     )
+
+    fun reset() {
+        characters.clear()
+        stats.clear()
+        hitPoints.clear()
+        deathSaves.clear()
+        skills.clear()
+        spellSlots.clear()
+        inventory.clear()
+    }
 }
 
 // ── CharacterSheet response model ──────────────────────────────────────────

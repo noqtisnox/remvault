@@ -7,7 +7,7 @@ object RulesEngine {
 
     // ── Ability Modifiers ──────────────────────────────────────────────────
 
-    fun modifier(score: Int): Int = (score - 10) / 2
+    fun modifier(score: Int): Int = Math.floorDiv(score - 10, 2)
 
     fun modifiers(stats: Stats) = object {
         val strength     = modifier(stats.strength)

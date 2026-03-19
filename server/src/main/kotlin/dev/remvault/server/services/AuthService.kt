@@ -30,11 +30,11 @@ object AuthService {
             throw IllegalArgumentException("Username already taken")
 
         val user = User(
-            id           = UUID.randomUUID().toString(),
-            username     = username,
-            email        = email,
+            id = UUID.randomUUID().toString(),
+            username = username,
+            email = email,
             passwordHash = hashPassword(password),
-            role         = role
+            role = role
         )
         users[user.id] = user
         return user
@@ -65,4 +65,8 @@ object AuthService {
 
     private fun checkPassword(password: String, hash: String): Boolean =
         hashPassword(password) == hash
+
+    fun reset() = users.clear()
+
+    fun findByEmail(email: String): User? = users.values.find { it.email == email }
 }

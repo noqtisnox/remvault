@@ -3,6 +3,7 @@ package dev.remvault
 import dev.remvault.server.routing.authRoutes
 import dev.remvault.server.routing.characterRoutes
 import dev.remvault.server.routing.campaignRoutes
+import dev.remvault.server.routing.diceRoutes
 import io.ktor.server.application.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -17,6 +18,7 @@ fun Application.configureRouting() {
             authRoutes()
             characterRoutes()
             campaignRoutes()
+            diceRoutes()
         }
     }
 }

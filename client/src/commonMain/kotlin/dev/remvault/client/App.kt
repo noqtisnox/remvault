@@ -3,125 +3,49 @@ package dev.remvault.client
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.unit.dp
-import dev.remvault.client.api.RemVaultApi
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import kotlinx.coroutines.launch
+import dev.remvault.client.ui.auth.LoginScreen
+import dev.remvault.client.ui.characters.CharacterCreatorScreen
 import kotlinx.serialization.Serializable
 
-// Temporary DTO
+// Temporary DTOs until moved to :shared
 @Serializable
 data class LoginRequest(val email: String, val password: String)
+
+@Serializable
+data class AuthResponse(val token: String, val userId: String, val username: String, val role: String)
+
+@Serializable
+data class CreateCharacterRequest(
+    val name: String, val race: String, val characterClass: String, val background: String,
+    val level: Int = 1,
+    // Optional stats (if null, backend rolls 4d6)
+    val strength: Int? = null, val dexterity: Int? = null, val constitution: Int? = null,
+    val intelligence: Int? = null, val wisdom: Int? = null, val charisma: Int? = null
+)
+
+enum class Screen { LOGIN, CHARACTER_CREATOR }
 
 @Composable
 fun App() {
     MaterialTheme {
-        // Form State
-        var email by remember { mutableStateOf("") }
-        var password by remember { mutableStateOf("") }
+        var currentScreen by remember { mutableStateOf(Screen.LOGIN) }
+        var authToken by remember { mutableStateOf<String?>(null) }
 
-        // Request State
-        var isLoading by remember { mutableStateOf(false) }
-        var resultMessage by remember { mutableStateOf<String?>(null) }
-        var isError by remember { mutableStateOf(false) }
-
-        // Coroutine scope for launching the API call
-        val scope = rememberCoroutineScope()
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .windowInsetsPadding(WindowInsets.safeDrawing),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
         ) {
-            Text(
-                text = "Welcome to RemVault",
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            OutlinedTextField(
-                value = email,
-                onValueChange = { email = it },
-                label = { Text("Email") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                label = { Text("Password") },
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    isLoading = true
-                    resultMessage = null
-                    isError = false
-
-                    scope.launch {
-                        try {
-                            // Adjust the path ("/api/auth/login") if your AuthRoutes.kt uses a different endpoint!
-                            val response = RemVaultApi.client.post("${RemVaultApi.BASE_URL}/api/v1/auth/login") {
-                                contentType(ContentType.Application.Json)
-                                setBody(LoginRequest(email, password))
-                            }
-
-                            if (response.status.isSuccess()) {
-                                resultMessage = "Success! Token received."
-                                isError = false
-                            } else {
-                                resultMessage = "Login failed: ${response.status.description}"
-                                isError = true
-                            }
-                        } catch (e: Exception) {
-                            resultMessage = "Network error: ${e.message}"
-                            isError = true
-                        } finally {
-                            isLoading = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                enabled = !isLoading && email.isNotBlank() && password.isNotBlank()
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Login")
+            when (currentScreen) {
+                Screen.LOGIN -> {
+                    LoginScreen(onLoginSuccess = { token ->
+                        authToken = token
+                        currentScreen = Screen.CHARACTER_CREATOR
+                    })
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Display the result of the API call
-            resultMessage?.let {
-                Text(
-                    text = it,
-                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Screen.CHARACTER_CREATOR -> {
+                    CharacterCreatorScreen(token = authToken!!)
+                }
             }
         }
     }

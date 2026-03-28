@@ -29,14 +29,7 @@ fun Route.characterRoutes() {
 
                 val sheet = CharacterService.createCharacter(
                     userId         = userId,
-                    name           = req.name,
-                    race           = req.race,
-                    characterClass = req.characterClass,
-                    background     = req.background,
-                    campaignId     = req.campaignId,
-                    alignment      = req.alignment,
-                    subrace        = req.subrace,
-                    subclass       = req.subclass,
+                    req            = req
                 )
                 call.respond(HttpStatusCode.Created, sheet)
             }

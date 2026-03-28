@@ -74,45 +74,55 @@ object CharacterService {
     // ── Create ─────────────────────────────────────────────────────────────
 
     fun createCharacter(
-        userId: String, name: String, race: String, characterClass: String, background: String,
-        campaignId: String? = null, alignment: String? = null, subrace: String? = null, subclass: String? = null
+        userId: String,
+        req: dev.remvault.server.dto.CreateCharacterRequest
     ): CharacterSheet = transaction {
         val charId = UUID.randomUUID().toString()
 
-        val rolled = DiceService.rollStatBlock()
-        val hitDie = RulesEngine.hitDie(characterClass)
-        val maxHp = RulesEngine.maxHitPoints(1, hitDie, rolled.constitution)
+        // Use provided stats OR generate random ones if not provided
+        val str = req.strength ?: DiceService.rollStat()
+        val dex = req.dexterity ?: DiceService.rollStat()
+        val con = req.constitution ?: DiceService.rollStat()
+        val intel = req.intelligence ?: DiceService.rollStat()
+        val wis = req.wisdom ?: DiceService.rollStat()
+        val cha = req.charisma ?: DiceService.rollStat()
+
+        val hitDie = RulesEngine.hitDie(req.characterClass)
+        // Calculate max HP based on starting level
+        val maxHp = RulesEngine.maxHitPoints(req.level, hitDie, con)
 
         Characters.insert {
             it[id] = charId
             it[Characters.userId] = userId
-            it[Characters.campaignId] = campaignId
-            it[Characters.name] = name
-            it[Characters.race] = race
-            it[Characters.subrace] = subrace
-            it[Characters.characterClass] = characterClass
-            it[Characters.subclass] = subclass
-            it[level] = 1
-            it[Characters.background] = background
-            it[Characters.alignment] = alignment
+            it[Characters.campaignId] = req.campaignId
+            it[Characters.name] = req.name
+            it[Characters.race] = req.race
+            it[Characters.subrace] = req.subrace
+            it[Characters.characterClass] = req.characterClass
+            it[Characters.subclass] = req.subclass
+            it[level] = req.level
+            it[background] = req.background
+            it[alignment] = req.alignment
+            it[experiencePoints] = req.experiencePoints
+            it[inspiration] = req.inspiration
             it[status] = CharacterStatus.ALIVE.name
         }
 
         CharacterStats.insert {
             it[characterId] = charId
-            it[strength] = rolled.strength
-            it[dexterity] = rolled.dexterity
-            it[constitution] = rolled.constitution
-            it[intelligence] = rolled.intelligence
-            it[wisdom] = rolled.wisdom
-            it[charisma] = rolled.charisma
+            it[strength] = str
+            it[dexterity] = dex
+            it[constitution] = con
+            it[intelligence] = intel
+            it[wisdom] = wis
+            it[charisma] = cha
         }
 
         CharacterHitPoints.insert {
             it[characterId] = charId
             it[maximum] = maxHp
             it[current] = maxHp
-            it[hitDiceTotal] = 1
+            it[hitDiceTotal] = req.level
         }
 
         CharacterDeathSaves.insert { it[characterId] = charId }

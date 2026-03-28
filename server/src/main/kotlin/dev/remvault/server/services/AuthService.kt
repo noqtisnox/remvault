@@ -2,17 +2,26 @@ package dev.remvault.server.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import dev.remvault.server.database.Users
 import dev.remvault.shared.enums.UserRole
 import dev.remvault.shared.models.User
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
 object AuthService {
 
-    // In-memory store — to be replaced with DB in Phase 2
-    private val users = mutableMapOf<String, User>()
+    // ── Helper to map a ResultRow to your User model ───────────────
+    private fun ResultRow.toUser(): User = User(
+        id = this[Users.id],
+        username = this[Users.username],
+        email = this[Users.email],
+        passwordHash = this[Users.passwordHash],
+        role = UserRole.valueOf(this[Users.role]),
+        createdAt = this[Users.createdAt]
+    )
 
-    // ── Token Generation ───────────────────────────────────────────────────
-
+    // ── Token Generation ───────────────────────────────────────────
     fun generateToken(user: User): String = JWT.create()
         .withIssuer("remvault")
         .withAudience("remvault-users")
@@ -21,42 +30,56 @@ object AuthService {
         .withExpiresAt(Date(System.currentTimeMillis() + 86_400_000)) // 24h
         .sign(Algorithm.HMAC256("remvault-dev-secret-change-in-production"))
 
-    // ── Register ───────────────────────────────────────────────────────────
-
-    fun register(username: String, email: String, password: String, role: UserRole): User {
-        if (users.values.any { it.email == email })
+    // ── Register ───────────────────────────────────────────────────
+    fun register(username: String, email: String, password: String, role: UserRole): User = transaction {
+        // Check for existing users
+        if (Users.select { Users.email eq email }.count() > 0)
             throw IllegalArgumentException("Email already in use")
-        if (users.values.any { it.username == username })
+        if (Users.select { Users.username eq username }.count() > 0)
             throw IllegalArgumentException("Username already taken")
 
-        val user = User(
-            id = UUID.randomUUID().toString(),
-            username = username,
-            email = email,
-            passwordHash = hashPassword(password),
-            role = role
-        )
-        users[user.id] = user
-        return user
+        val newId = UUID.randomUUID().toString()
+        val currentTime = System.currentTimeMillis()
+
+        Users.insert {
+            it[id] = newId
+            it[Users.username] = username
+            it[Users.email] = email
+            it[passwordHash] = hashPassword(password)
+            it[Users.role] = role.name
+            it[createdAt] = currentTime
+        }
+
+        User(newId, username, email, hashPassword(password), role, currentTime)
     }
 
-    // ── Login ──────────────────────────────────────────────────────────────
-
-    fun login(email: String, password: String): User {
-        val user = users.values.find { it.email == email }
+    // ── Login ──────────────────────────────────────────────────────
+    fun login(email: String, password: String): User = transaction {
+        val userRow = Users.select { Users.email eq email }.singleOrNull()
             ?: throw IllegalArgumentException("Invalid email or password")
+
+        val user = userRow.toUser()
+
         if (!checkPassword(password, user.passwordHash))
             throw IllegalArgumentException("Invalid email or password")
-        return user
+
+        user
     }
 
-    // ── Lookup ─────────────────────────────────────────────────────────────
+    // ── Lookup ─────────────────────────────────────────────────────
+    fun findById(id: String): User? = transaction {
+        Users.select { Users.id eq id }
+            .map { it.toUser() }
+            .singleOrNull()
+    }
 
-    fun findById(id: String): User? = users[id]
+    fun findByEmail(email: String): User? = transaction {
+        Users.select { Users.email eq email }
+            .map { it.toUser() }
+            .singleOrNull()
+    }
 
-    // ── Password Hashing ───────────────────────────────────────────────────
-    // Simple SHA-256 for Phase 1 — to be replaced with bcrypt in Phase 2
-
+    // ── Password Hashing ───────────────────────────────────────────
     private fun hashPassword(password: String): String {
         val digest = java.security.MessageDigest.getInstance("SHA-256")
         return digest.digest(password.toByteArray())
@@ -65,8 +88,4 @@ object AuthService {
 
     private fun checkPassword(password: String, hash: String): Boolean =
         hashPassword(password) == hash
-
-    fun reset() = users.clear()
-
-    fun findByEmail(email: String): User? = users.values.find { it.email == email }
 }

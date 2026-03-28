@@ -1,196 +1,236 @@
 package dev.remvault.server.services
 
+import kotlinx.serialization.Serializable
+
+import dev.remvault.server.database.*
 import dev.remvault.shared.enums.CharacterStatus
 import dev.remvault.shared.enums.Proficiency
 import dev.remvault.shared.models.*
 import dev.remvault.shared.rules.RulesEngine
-import kotlinx.serialization.Serializable
+import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.UUID
+
+@Serializable
+data class CharacterSheet(
+    val character: Character,
+    val stats: Stats,
+    val hitPoints: HitPoints,
+    val proficiencyBonus: Int,
+    val strModifier: Int,
+    val dexModifier: Int,
+    val conModifier: Int,
+    val intModifier: Int,
+    val wisModifier: Int,
+    val chaModifier: Int,
+    val passivePerception: Int,
+    val carryingCapacity: Int,
+    val skills: List<SkillProficiency>,
+    val spellSlots: List<SpellSlot>,
+    val inventory: List<InventoryEntry>
+)
 
 object CharacterService {
 
-    // ── In-memory stores ───────────────────────────────────────────────────
+    // ── Mappers ────────────────────────────────────────────────────────────
 
-    private val characters = mutableMapOf<String, Character>()
-    private val stats = mutableMapOf<String, Stats>()
-    private val hitPoints = mutableMapOf<String, HitPoints>()
-    private val deathSaves = mutableMapOf<String, DeathSaves>()
-    private val skills = mutableMapOf<String, MutableList<SkillProficiency>>()
-    private val spellSlots = mutableMapOf<String, MutableList<SpellSlot>>()
-    private val inventory = mutableMapOf<String, MutableList<InventoryEntry>>()
+    private fun ResultRow.toCharacter() = Character(
+        id = this[Characters.id],
+        userId = this[Characters.userId],
+        campaignId = this[Characters.campaignId],
+        name = this[Characters.name],
+        race = this[Characters.race],
+        subrace = this[Characters.subrace],
+        characterClass = this[Characters.characterClass],
+        subclass = this[Characters.subclass],
+        level = this[Characters.level],
+        background = this[Characters.background],
+        alignment = this[Characters.alignment],
+        experiencePoints = this[Characters.experiencePoints],
+        inspiration = this[Characters.inspiration],
+        status = CharacterStatus.valueOf(this[Characters.status])
+    )
+
+    private fun ResultRow.toStats() = Stats(
+        characterId = this[CharacterStats.characterId],
+        strength = this[CharacterStats.strength],
+        dexterity = this[CharacterStats.dexterity],
+        constitution = this[CharacterStats.constitution],
+        intelligence = this[CharacterStats.intelligence],
+        wisdom = this[CharacterStats.wisdom],
+        charisma = this[CharacterStats.charisma]
+    )
+
+    private fun ResultRow.toHitPoints() = HitPoints(
+        characterId = this[CharacterHitPoints.characterId],
+        maximum = this[CharacterHitPoints.maximum],
+        current = this[CharacterHitPoints.current],
+        temporary = this[CharacterHitPoints.temporary],
+        hitDiceTotal = this[CharacterHitPoints.hitDiceTotal],
+        hitDiceUsed = this[CharacterHitPoints.hitDiceUsed]
+    )
 
     // ── Create ─────────────────────────────────────────────────────────────
 
     fun createCharacter(
-        userId: String,
-        name: String,
-        race: String,
-        characterClass: String,
-        background: String,
-        campaignId: String? = null,
-        alignment: String? = null,
-        subrace: String? = null,
-        subclass: String? = null,
-    ): CharacterSheet {
-        val id = UUID.randomUUID().toString()
+        userId: String, name: String, race: String, characterClass: String, background: String,
+        campaignId: String? = null, alignment: String? = null, subrace: String? = null, subclass: String? = null
+    ): CharacterSheet = transaction {
+        val charId = UUID.randomUUID().toString()
 
-        // Roll stats via DiceService
         val rolled = DiceService.rollStatBlock()
-        val charStats = Stats(
-            characterId = id,
-            strength = rolled.strength,
-            dexterity = rolled.dexterity,
-            constitution = rolled.constitution,
-            intelligence = rolled.intelligence,
-            wisdom = rolled.wisdom,
-            charisma = rolled.charisma
-        )
-
-        // Calculate HP via RulesEngine
         val hitDie = RulesEngine.hitDie(characterClass)
-        val maxHp = RulesEngine.maxHitPoints(1, hitDie, charStats.constitution)
+        val maxHp = RulesEngine.maxHitPoints(1, hitDie, rolled.constitution)
 
-        val character = Character(
-            id = id,
-            userId = userId,
-            campaignId = campaignId,
-            name = name,
-            race = race,
-            subrace = subrace,
-            characterClass = characterClass,
-            subclass = subclass,
-            level = 1,
-            background = background,
-            alignment = alignment,
-            status = CharacterStatus.ALIVE
-        )
+        Characters.insert {
+            it[id] = charId
+            it[Characters.userId] = userId
+            it[Characters.campaignId] = campaignId
+            it[Characters.name] = name
+            it[Characters.race] = race
+            it[Characters.subrace] = subrace
+            it[Characters.characterClass] = characterClass
+            it[Characters.subclass] = subclass
+            it[level] = 1
+            it[Characters.background] = background
+            it[Characters.alignment] = alignment
+            it[status] = CharacterStatus.ALIVE.name
+        }
 
-        val hp = HitPoints(
-            characterId = id,
-            maximum = maxHp,
-            current = maxHp,
-            hitDiceTotal = 1
-        )
+        CharacterStats.insert {
+            it[characterId] = charId
+            it[strength] = rolled.strength
+            it[dexterity] = rolled.dexterity
+            it[constitution] = rolled.constitution
+            it[intelligence] = rolled.intelligence
+            it[wisdom] = rolled.wisdom
+            it[charisma] = rolled.charisma
+        }
 
-        // Seed default skills with no proficiency
-        val defaultSkills = defaultSkillList(id)
+        CharacterHitPoints.insert {
+            it[characterId] = charId
+            it[maximum] = maxHp
+            it[current] = maxHp
+            it[hitDiceTotal] = 1
+        }
 
-        characters[id] = character
-        stats[id] = charStats
-        hitPoints[id] = hp
-        deathSaves[id] = DeathSaves(characterId = id)
-        skills[id] = defaultSkills.toMutableList()
-        spellSlots[id] = mutableListOf()
-        inventory[id] = mutableListOf()
+        CharacterDeathSaves.insert { it[characterId] = charId }
 
-        return buildSheet(character, charStats, hp)
+        defaultSkillList(charId).forEach { skill ->
+            CharacterSkills.insert {
+                it[characterId] = charId
+                it[skillName] = skill.skillName
+                it[stat] = skill.stat
+                it[proficiency] = skill.proficiency.name
+            }
+        }
+
+        getCharacter(charId)!!
     }
 
     // ── Read ───────────────────────────────────────────────────────────────
 
-    fun getCharacter(characterId: String): CharacterSheet? {
-        val character = characters[characterId] ?: return null
-        val charStats = stats[characterId] ?: return null
-        val hp = hitPoints[characterId] ?: return null
-        return buildSheet(character, charStats, hp)
+    fun getCharacter(characterId: String): CharacterSheet? = transaction {
+        val characterRow = Characters.select { Characters.id eq characterId }.singleOrNull() ?: return@transaction null
+        val statsRow = CharacterStats.select { CharacterStats.characterId eq characterId }.single()
+        val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single()
+
+        val skills = CharacterSkills.select { CharacterSkills.characterId eq characterId }.map {
+            SkillProficiency(it[CharacterSkills.characterId], it[CharacterSkills.skillName], it[CharacterSkills.stat], Proficiency.valueOf(it[CharacterSkills.proficiency]))
+        }
+
+        val spells = CharacterSpellSlots.select { CharacterSpellSlots.characterId eq characterId }.map {
+            SpellSlot(it[CharacterSpellSlots.characterId], it[CharacterSpellSlots.level], it[CharacterSpellSlots.maximum], it[CharacterSpellSlots.current])
+        }
+
+        val inventory = CharacterInventory.select { CharacterInventory.characterId eq characterId }.map {
+            InventoryEntry(it[CharacterInventory.id], it[CharacterInventory.characterId], it[CharacterInventory.itemName], it[CharacterInventory.quantity], it[CharacterInventory.equipped], it[CharacterInventory.attuned], it[CharacterInventory.notes])
+        }
+
+        buildSheet(characterRow.toCharacter(), statsRow.toStats(), hpRow.toHitPoints(), skills, spells, inventory)
     }
 
-    fun getCharactersByUser(userId: String): List<CharacterSheet> =
-        characters.values
-            .filter { it.userId == userId }
-            .mapNotNull { getCharacter(it.id) }
+    fun getCharactersByUser(userId: String): List<CharacterSheet> = transaction {
+        Characters.select { Characters.userId eq userId }.mapNotNull { getCharacter(it[Characters.id]) }
+    }
 
-    fun getCharactersByCampaign(campaignId: String): List<CharacterSheet> =
-        characters.values
-            .filter { it.campaignId == campaignId }
-            .mapNotNull { getCharacter(it.id) }
+    fun getCharactersByCampaign(campaignId: String): List<CharacterSheet> = transaction {
+        Characters.select { Characters.campaignId eq campaignId }.mapNotNull { getCharacter(it[Characters.id]) }
+    }
 
     // ── Update ─────────────────────────────────────────────────────────────
 
-    fun updateHitPoints(characterId: String, newCurrent: Int): HitPoints {
-        val hp = hitPoints[characterId]
+    fun updateHitPoints(characterId: String, newCurrent: Int): HitPoints = transaction {
+        val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.singleOrNull()
             ?: throw NoSuchElementException("Character not found")
-        val updated = hp.copy(current = newCurrent.coerceIn(0, hp.maximum))
-        hitPoints[characterId] = updated
-        return updated
+        val max = hpRow[CharacterHitPoints.maximum]
+        val safeCurrent = newCurrent.coerceIn(0, max)
+
+        CharacterHitPoints.update({ CharacterHitPoints.characterId eq characterId }) {
+            it[current] = safeCurrent
+        }
+        CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single().toHitPoints()
     }
 
     fun updateCharacter(
-        characterId: String,
-        userId: String,
-        name: String? = null,
-        alignment: String? = null,
-        subclass: String? = null,
-        experiencePoints: Int? = null,
-    ): CharacterSheet {
-        val character = characters[characterId]
+        characterId: String, userId: String, name: String? = null, alignment: String? = null,
+        subclass: String? = null, experiencePoints: Int? = null,
+    ): CharacterSheet = transaction {
+        val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
             ?: throw NoSuchElementException("Character not found")
-        if (character.userId != userId)
-            throw IllegalAccessException("You don't own this character")
+        if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
 
-        val updated = character.copy(
-            name = name ?: character.name,
-            alignment = alignment ?: character.alignment,
-            subclass = subclass ?: character.subclass,
-            experiencePoints = experiencePoints ?: character.experiencePoints,
-            // Auto level-up based on XP
-            level = experiencePoints
-                ?.let { RulesEngine.levelFromXp(it) }
-                ?: character.level
-        )
+        val newLevel = experiencePoints?.let { RulesEngine.levelFromXp(it) } ?: charRow[Characters.level]
 
-        characters[characterId] = updated
-        return buildSheet(updated, stats[characterId]!!, hitPoints[characterId]!!)
+        Characters.update({ Characters.id eq characterId }) {
+            if (name != null) it[Characters.name] = name
+            if (alignment != null) it[Characters.alignment] = alignment
+            if (subclass != null) it[Characters.subclass] = subclass
+            if (experiencePoints != null) it[Characters.experiencePoints] = experiencePoints
+            it[level] = newLevel
+        }
+        getCharacter(characterId)!!
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────
 
-    fun deleteCharacter(characterId: String, userId: String) {
-        val character = characters[characterId]
+    fun deleteCharacter(characterId: String, userId: String) = transaction {
+        val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
             ?: throw NoSuchElementException("Character not found")
-        if (character.userId != userId)
-            throw IllegalAccessException("You don't own this character")
+        if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
 
-        characters.remove(characterId)
-        stats.remove(characterId)
-        hitPoints.remove(characterId)
-        deathSaves.remove(characterId)
-        skills.remove(characterId)
-        spellSlots.remove(characterId)
-        inventory.remove(characterId)
+        // Manually cascade deletes to child tables
+        CharacterStats.deleteWhere { CharacterStats.characterId eq characterId }
+        CharacterHitPoints.deleteWhere { CharacterHitPoints.characterId eq characterId }
+        CharacterDeathSaves.deleteWhere { CharacterDeathSaves.characterId eq characterId }
+        CharacterSkills.deleteWhere { CharacterSkills.characterId eq characterId }
+        CharacterSpellSlots.deleteWhere { CharacterSpellSlots.characterId eq characterId }
+        CharacterInventory.deleteWhere { CharacterInventory.characterId eq characterId }
+
+        // Finally, delete the parent
+        Characters.deleteWhere { Characters.id eq characterId }
     }
 
-    // ── Sheet Builder ──────────────────────────────────────────────────────
-    // Assembles all computed values in one place
+    // ── Sheet Builder & Helpers ────────────────────────────────────────────
 
     private fun buildSheet(
-        character: Character,
-        charStats: Stats,
-        hp: HitPoints
+        character: Character, charStats: Stats, hp: HitPoints,
+        skills: List<SkillProficiency>, spells: List<SpellSlot>, inventory: List<InventoryEntry>
     ): CharacterSheet {
         val level = character.level
         val prof = RulesEngine.proficiencyBonus(level)
 
         return CharacterSheet(
-            character = character,
-            stats = charStats,
-            hitPoints = hp,
-            proficiencyBonus = prof,
-            strModifier = RulesEngine.modifier(charStats.strength),
-            dexModifier = RulesEngine.modifier(charStats.dexterity),
-            conModifier = RulesEngine.modifier(charStats.constitution),
-            intModifier = RulesEngine.modifier(charStats.intelligence),
-            wisModifier = RulesEngine.modifier(charStats.wisdom),
-            chaModifier = RulesEngine.modifier(charStats.charisma),
+            character = character, stats = charStats, hitPoints = hp, proficiencyBonus = prof,
+            strModifier = RulesEngine.modifier(charStats.strength), dexModifier = RulesEngine.modifier(charStats.dexterity),
+            conModifier = RulesEngine.modifier(charStats.constitution), intModifier = RulesEngine.modifier(charStats.intelligence),
+            wisModifier = RulesEngine.modifier(charStats.wisdom), chaModifier = RulesEngine.modifier(charStats.charisma),
             passivePerception = RulesEngine.passivePerception(charStats.wisdom, level, false),
             carryingCapacity = RulesEngine.carryingCapacity(charStats.strength),
-            skills = skills[character.id] ?: emptyList(),
-            spellSlots = spellSlots[character.id] ?: emptyList(),
-            inventory = inventory[character.id] ?: emptyList()
+            skills = skills, spellSlots = spells, inventory = inventory
         )
     }
-
-    // ── Helpers ────────────────────────────────────────────────────────────
 
     private fun defaultSkillList(characterId: String) = listOf(
         SkillProficiency(characterId, "Acrobatics", "dexterity", Proficiency.NONE),
@@ -212,36 +252,4 @@ object CharacterService {
         SkillProficiency(characterId, "Stealth", "dexterity", Proficiency.NONE),
         SkillProficiency(characterId, "Survival", "wisdom", Proficiency.NONE),
     )
-
-    fun reset() {
-        characters.clear()
-        stats.clear()
-        hitPoints.clear()
-        deathSaves.clear()
-        skills.clear()
-        spellSlots.clear()
-        inventory.clear()
-    }
 }
-
-// ── CharacterSheet response model ──────────────────────────────────────────
-// Lives here since it's server-only — not shared with other modules
-
-@Serializable
-data class CharacterSheet(
-    val character: Character,
-    val stats: Stats,
-    val hitPoints: HitPoints,
-    val proficiencyBonus: Int,
-    val strModifier: Int,
-    val dexModifier: Int,
-    val conModifier: Int,
-    val intModifier: Int,
-    val wisModifier: Int,
-    val chaModifier: Int,
-    val passivePerception: Int,
-    val carryingCapacity: Int,
-    val skills: List<SkillProficiency>,
-    val spellSlots: List<SpellSlot>,
-    val inventory: List<InventoryEntry>
-)

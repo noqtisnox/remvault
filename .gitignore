@@ -1,19 +1,28 @@
 # Gradle
 .gradle/
 build/
+*/build/
 *.class
 
-# IntelliJ / IDE
+# IntelliJ / Android Studio
 .idea/
 *.iml
 .vscode/
 
 # Kotlin
+.kotlin/
 *.kotlin_module
 
-# Node
-web/node_modules/
-web/dist/
+# Android & Local Configuration
+local.properties
+.cxx/
+
+# iOS & macOS (For cross-platform repository hygiene)
+.DS_Store
+iosApp/build/
+iosApp/Pods/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
 
 # Logs
 *.log
@@ -21,3 +30,5 @@ web/dist/
 # Environment — never commit secrets
 .env
 application-local.conf
+
+web/node_modules

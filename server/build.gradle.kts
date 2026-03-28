@@ -28,8 +28,15 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     implementation(libs.ktor.server.netty)
     implementation(libs.logback.classic)
+
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
+
+    implementation(libs.exposed.core)
+    implementation(libs.exposed.dao)
+    implementation(libs.exposed.jdbc)
+    implementation(libs.postgres.driver)
+    implementation(libs.hikaricp)
 
     implementation(project(":shared"))
 }

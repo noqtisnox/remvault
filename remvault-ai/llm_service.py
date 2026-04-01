@@ -1,4 +1,8 @@
+import hashlib
+import redis
 from llama_cpp import Llama
+
+cache = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 
 print("Loading Mistral model into memory... This might take a few seconds.")
 llm = Llama(
@@ -16,11 +20,24 @@ def generate_dnd_response(system_prompt: str, user_input: str, max_tokens: int =
     """
     full_prompt = f"<s>[INST] {system_prompt}\n\n{user_input} [/INST]"
     
+    prompt_hash = hashlib.sha256(full_prompt.encode('utf-8')).hexdigest()
+    cache_key = f"ai_response:{prompt_hash}"
+
+    cached_result = cache.get(cache_key)
+    if cached_result:
+        print("Cache hit for prompt.")
+        return cached_result
+    print("Cache miss for prompt. Generating response...")
+
     output = llm(
         full_prompt, 
         max_tokens=max_tokens, 
         stop=["</s>"], 
         echo=False
     )
+
+    generated_text = output["choices"][0]["text"].strip()
+
+    cache.set(cache_key, generated_text, ex=86400)
     
-    return output["choices"][0]["text"].strip()
+    return generated_text

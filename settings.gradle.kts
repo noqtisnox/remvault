@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "remvault"
 
-include("client", "server", "shared")
+include("server", "shared")

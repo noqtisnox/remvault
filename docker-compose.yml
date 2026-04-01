@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  remvault-db:
+    image: postgres:15-alpine
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U remvault -d remvault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      POSTGRES_USER: remvault
+      POSTGRES_PASSWORD: remvault
+      POSTGRES_DB: remvault
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - remvault_net
+
+  remvault-cache:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - remvault_net
+
+  remvault-ai:
+    build:
+      context: ./remvault-ai
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount your local models folder so Docker doesn't have to copy the 4GB file
+      - ./remvault-ai/models:/app/models 
+    environment:
+      # Tell Python to connect to the Redis container
+      - REDIS_HOST=remvault-cache
+    depends_on:
+      - remvault-cache
+    networks:
+      - remvault_net
+
+  remvault-core:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: remvault-db
+      REDIS_HOST: remvault-cache
+    depends_on:
+      remvault-db:
+        condition: service_healthy
+      remvault-cache:
+        condition: service_started
+    networks:
+      - remvault_net
+
+volumes:
+  pgdata:
+
+networks:
+  remvault_net:
+    driver: bridge

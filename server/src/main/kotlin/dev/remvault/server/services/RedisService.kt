@@ -4,8 +4,8 @@ import redis.clients.jedis.JedisPool
 import redis.clients.jedis.JedisPoolConfig
 
 object RedisService {
-    // Connect to the local Redis Docker container
-    private val pool = JedisPool(JedisPoolConfig(), "localhost", 6379)
+    val redisHost = System.getenv("REDIS_HOST") ?: "127.0.0.1"
+    private val pool = JedisPool(JedisPoolConfig(), redisHost, 6379)
 
     fun get(key: String): String? {
         pool.resource.use { jedis -> 

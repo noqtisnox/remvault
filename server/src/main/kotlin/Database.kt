@@ -17,11 +17,19 @@ import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
 
 fun Application.configureDatabases() {
+    // 1. Pull environment variables injected by Docker Compose, with safe local fallbacks
+    val dbHost = System.getenv("DB_HOST") ?: "localhost"
+    val dbPort = System.getenv("DB_PORT") ?: "5432"
+    val dbName = System.getenv("DB_NAME") ?: "remvault"
+    val dbUser = System.getenv("DB_USER") ?: "remvault"
+    val dbPassword = System.getenv("DB_PASSWORD") ?: "remvault"
+
     val config = HikariConfig().apply {
         driverClassName = "org.postgresql.Driver"
-        jdbcUrl = "jdbc:postgresql://localhost:5432/remvault"
-        username = "remvault"
-        password = "remvault"
+        // 2. Inject the dynamic host into the connection string
+        jdbcUrl = "jdbc:postgresql://$dbHost:$dbPort/$dbName"
+        username = dbUser
+        password = dbPassword
         maximumPoolSize = 3
         isAutoCommit = false
         transactionIsolation = "TRANSACTION_REPEATABLE_READ"
@@ -47,6 +55,5 @@ fun Application.configureDatabases() {
         )
     }
 
-    // Optional: Log that it connected successfully
-    log.info("Successfully connected to the PostgreSQL database.")
+    log.info("Successfully connected to the PostgreSQL database at $dbHost.")
 }

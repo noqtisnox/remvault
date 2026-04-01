@@ -1,8 +1,10 @@
 import hashlib
+import os
 import redis
 from llama_cpp import Llama
 
-cache = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+redis_host = os.getenv("REDIS_HOST", "127.0.0.1")
+cache = redis.Redis(host=redis_host, port=6379, db=0, decode_responses=True)
 
 print("Loading Mistral model into memory... This might take a few seconds.")
 llm = Llama(

@@ -10,23 +10,23 @@ object RulesEngine {
     fun modifier(score: Int): Int = Math.floorDiv(score - 10, 2)
 
     fun modifiers(stats: Stats) = object {
-        val strength     = modifier(stats.strength)
-        val dexterity    = modifier(stats.dexterity)
+        val strength = modifier(stats.strength)
+        val dexterity = modifier(stats.dexterity)
         val constitution = modifier(stats.constitution)
         val intelligence = modifier(stats.intelligence)
-        val wisdom       = modifier(stats.wisdom)
-        val charisma     = modifier(stats.charisma)
+        val wisdom = modifier(stats.wisdom)
+        val charisma = modifier(stats.charisma)
     }
 
     // ── Proficiency Bonus ──────────────────────────────────────────────────
 
     fun proficiencyBonus(level: Int): Int = when {
-        level < 1  -> throw IllegalArgumentException("Level must be at least 1")
-        level <= 4  -> 2
-        level <= 8  -> 3
+        level < 1 -> throw IllegalArgumentException("Level must be at least 1")
+        level <= 4 -> 2
+        level <= 8 -> 3
         level <= 12 -> 4
         level <= 16 -> 5
-        else        -> 6
+        else -> 6
     }
 
     // ── Skills ─────────────────────────────────────────────────────────────
@@ -36,12 +36,12 @@ object RulesEngine {
         level: Int,
         proficiency: Proficiency
     ): Int {
-        val base  = modifier(statScore)
-        val prof  = proficiencyBonus(level)
+        val base = modifier(statScore)
+        val prof = proficiencyBonus(level)
         return base + when (proficiency) {
-            Proficiency.NONE       -> 0
+            Proficiency.NONE -> 0
             Proficiency.PROFICIENT -> prof
-            Proficiency.EXPERT     -> prof * 2
+            Proficiency.EXPERT -> prof * 2
         }
     }
 
@@ -95,12 +95,13 @@ object RulesEngine {
     // ── Hit Dice by Class ──────────────────────────────────────────────────
 
     fun hitDie(characterClass: String): Int = when (characterClass.lowercase()) {
-        "barbarian"                         -> 12
-        "fighter", "paladin", "ranger"      -> 10
+        "barbarian" -> 12
+        "fighter", "paladin", "ranger" -> 10
         "bard", "cleric", "druid",
-        "monk", "rogue", "warlock"          -> 8
-        "sorcerer", "wizard"                -> 6
-        else                                -> 8  // sensible default for homebrew
+        "monk", "rogue", "warlock" -> 8
+
+        "sorcerer", "wizard" -> 6
+        else -> 8  // sensible default for homebrew
     }
 
     // ── Passive Perception ─────────────────────────────────────────────────
@@ -111,16 +112,16 @@ object RulesEngine {
     // ── Experience & Level ─────────────────────────────────────────────────
 
     fun levelFromXp(xp: Int): Int = when {
-        xp < 300    -> 1
-        xp < 900    -> 2
-        xp < 2700   -> 3
-        xp < 6500   -> 4
-        xp < 14000  -> 5
-        xp < 23000  -> 6
-        xp < 34000  -> 7
-        xp < 48000  -> 8
-        xp < 64000  -> 9
-        xp < 85000  -> 10
+        xp < 300 -> 1
+        xp < 900 -> 2
+        xp < 2700 -> 3
+        xp < 6500 -> 4
+        xp < 14000 -> 5
+        xp < 23000 -> 6
+        xp < 34000 -> 7
+        xp < 48000 -> 8
+        xp < 64000 -> 9
+        xp < 85000 -> 10
         xp < 100000 -> 11
         xp < 120000 -> 12
         xp < 140000 -> 13
@@ -130,19 +131,19 @@ object RulesEngine {
         xp < 265000 -> 17
         xp < 305000 -> 18
         xp < 355000 -> 19
-        else        -> 20
+        else -> 20
     }
 
     fun xpToNextLevel(currentLevel: Int): Int = when (currentLevel) {
-        1  -> 300
-        2  -> 900
-        3  -> 2700
-        4  -> 6500
-        5  -> 14000
-        6  -> 23000
-        7  -> 34000
-        8  -> 48000
-        9  -> 64000
+        1 -> 300
+        2 -> 900
+        3 -> 2700
+        4 -> 6500
+        5 -> 14000
+        6 -> 23000
+        7 -> 34000
+        8 -> 48000
+        9 -> 64000
         10 -> 85000
         11 -> 100000
         12 -> 120000
@@ -154,5 +155,30 @@ object RulesEngine {
         18 -> 305000
         19 -> 355000
         else -> 0  // level 20, max
+    }
+
+    fun getRacialStatBonuses(race: String): Map<String, Int> {
+        return when (race.lowercase()) {
+            "dragonborn" -> mapOf("strength" to 2, "charisma" to 1)
+            "dwarf" -> mapOf("constitution" to 2)
+            "elf" -> mapOf("dexterity" to 2)
+            "gnome" -> mapOf("intelligence" to 2)
+            "halfling" -> mapOf("dexterity" to 2)
+            "half-orc" -> mapOf("strength" to 2, "constitution" to 1)
+            "tiefling" -> mapOf("intelligence" to 1, "charisma" to 2)
+
+            // Standard Human gets +1 to all stats
+            "human" -> mapOf(
+                "strength" to 1, "dexterity" to 1, "constitution" to 1,
+                "intelligence" to 1, "wisdom" to 1, "charisma" to 1
+            )
+
+            // Note: Half-Elves technically get +2 Cha and +1 to two other stats of their choice.
+            // For MVP, we will just give them the +2 Cha.
+            // In a future update, we can add 'bonusStat1' and 'bonusStat2' to the CreateCharacterRequest!
+            "half-elf" -> mapOf("charisma" to 2)
+
+            else -> emptyMap()
+        }
     }
 }

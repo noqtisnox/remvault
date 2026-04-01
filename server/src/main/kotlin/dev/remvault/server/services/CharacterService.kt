@@ -79,17 +79,28 @@ object CharacterService {
     ): CharacterSheet = transaction {
         val charId = UUID.randomUUID().toString()
 
-        // Use provided stats OR generate random ones if not provided
-        val str = req.strength ?: DiceService.rollStat()
-        val dex = req.dexterity ?: DiceService.rollStat()
-        val con = req.constitution ?: DiceService.rollStat()
-        val intel = req.intelligence ?: DiceService.rollStat()
-        val wis = req.wisdom ?: DiceService.rollStat()
-        val cha = req.charisma ?: DiceService.rollStat()
+        // 1. Get base stats (either from request or roll 4d6)
+        val baseStr = req.strength ?: DiceService.rollStat()
+        val baseDex = req.dexterity ?: DiceService.rollStat()
+        val baseCon = req.constitution ?: DiceService.rollStat()
+        val baseInt = req.intelligence ?: DiceService.rollStat()
+        val baseWis = req.wisdom ?: DiceService.rollStat()
+        val baseCha = req.charisma ?: DiceService.rollStat()
+
+        // 2. Fetch racial bonuses
+        val raceBonuses = RulesEngine.getRacialStatBonuses(req.race)
+
+        // 3. Apply bonuses to calculate final stats
+        val finalStr = baseStr + (raceBonuses["strength"] ?: 0)
+        val finalDex = baseDex + (raceBonuses["dexterity"] ?: 0)
+        val finalCon = baseCon + (raceBonuses["constitution"] ?: 0)
+        val finalInt = baseInt + (raceBonuses["intelligence"] ?: 0)
+        val finalWis = baseWis + (raceBonuses["wisdom"] ?: 0)
+        val finalCha = baseCha + (raceBonuses["charisma"] ?: 0)
 
         val hitDie = RulesEngine.hitDie(req.characterClass)
-        // Calculate max HP based on starting level
-        val maxHp = RulesEngine.maxHitPoints(req.level, hitDie, con)
+        // Ensure max HP uses the final Constitution stat!
+        val maxHp = RulesEngine.maxHitPoints(req.level, hitDie, finalCon)
 
         Characters.insert {
             it[id] = charId
@@ -110,12 +121,13 @@ object CharacterService {
 
         CharacterStats.insert {
             it[characterId] = charId
-            it[strength] = str
-            it[dexterity] = dex
-            it[constitution] = con
-            it[intelligence] = intel
-            it[wisdom] = wis
-            it[charisma] = cha
+            // 4. Save the final stats to the database
+            it[strength] = finalStr
+            it[dexterity] = finalDex
+            it[constitution] = finalCon
+            it[intelligence] = finalInt
+            it[wisdom] = finalWis
+            it[charisma] = finalCha
         }
 
         CharacterHitPoints.insert {
@@ -147,15 +159,33 @@ object CharacterService {
         val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single()
 
         val skills = CharacterSkills.select { CharacterSkills.characterId eq characterId }.map {
-            SkillProficiency(it[CharacterSkills.characterId], it[CharacterSkills.skillName], it[CharacterSkills.stat], Proficiency.valueOf(it[CharacterSkills.proficiency]))
+            SkillProficiency(
+                it[CharacterSkills.characterId],
+                it[CharacterSkills.skillName],
+                it[CharacterSkills.stat],
+                Proficiency.valueOf(it[CharacterSkills.proficiency])
+            )
         }
 
         val spells = CharacterSpellSlots.select { CharacterSpellSlots.characterId eq characterId }.map {
-            SpellSlot(it[CharacterSpellSlots.characterId], it[CharacterSpellSlots.level], it[CharacterSpellSlots.maximum], it[CharacterSpellSlots.current])
+            SpellSlot(
+                it[CharacterSpellSlots.characterId],
+                it[CharacterSpellSlots.level],
+                it[CharacterSpellSlots.maximum],
+                it[CharacterSpellSlots.current]
+            )
         }
 
         val inventory = CharacterInventory.select { CharacterInventory.characterId eq characterId }.map {
-            InventoryEntry(it[CharacterInventory.id], it[CharacterInventory.characterId], it[CharacterInventory.itemName], it[CharacterInventory.quantity], it[CharacterInventory.equipped], it[CharacterInventory.attuned], it[CharacterInventory.notes])
+            InventoryEntry(
+                it[CharacterInventory.id],
+                it[CharacterInventory.characterId],
+                it[CharacterInventory.itemName],
+                it[CharacterInventory.quantity],
+                it[CharacterInventory.equipped],
+                it[CharacterInventory.attuned],
+                it[CharacterInventory.notes]
+            )
         }
 
         buildSheet(characterRow.toCharacter(), statsRow.toStats(), hpRow.toHitPoints(), skills, spells, inventory)
@@ -232,13 +262,21 @@ object CharacterService {
         val prof = RulesEngine.proficiencyBonus(level)
 
         return CharacterSheet(
-            character = character, stats = charStats, hitPoints = hp, proficiencyBonus = prof,
-            strModifier = RulesEngine.modifier(charStats.strength), dexModifier = RulesEngine.modifier(charStats.dexterity),
-            conModifier = RulesEngine.modifier(charStats.constitution), intModifier = RulesEngine.modifier(charStats.intelligence),
-            wisModifier = RulesEngine.modifier(charStats.wisdom), chaModifier = RulesEngine.modifier(charStats.charisma),
+            character = character,
+            stats = charStats,
+            hitPoints = hp,
+            proficiencyBonus = prof,
+            strModifier = RulesEngine.modifier(charStats.strength),
+            dexModifier = RulesEngine.modifier(charStats.dexterity),
+            conModifier = RulesEngine.modifier(charStats.constitution),
+            intModifier = RulesEngine.modifier(charStats.intelligence),
+            wisModifier = RulesEngine.modifier(charStats.wisdom),
+            chaModifier = RulesEngine.modifier(charStats.charisma),
             passivePerception = RulesEngine.passivePerception(charStats.wisdom, level, false),
             carryingCapacity = RulesEngine.carryingCapacity(charStats.strength),
-            skills = skills, spellSlots = spells, inventory = inventory
+            skills = skills,
+            spellSlots = spells,
+            inventory = inventory
         )
     }
 

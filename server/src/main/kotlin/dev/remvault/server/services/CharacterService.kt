@@ -1,6 +1,9 @@
 package dev.remvault.server.services
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 import dev.remvault.server.database.*
 import dev.remvault.shared.enums.CharacterStatus
@@ -153,42 +156,63 @@ object CharacterService {
 
     // ── Read ───────────────────────────────────────────────────────────────
 
-    fun getCharacter(characterId: String): CharacterSheet? = transaction {
-        val characterRow = Characters.select { Characters.id eq characterId }.singleOrNull() ?: return@transaction null
-        val statsRow = CharacterStats.select { CharacterStats.characterId eq characterId }.single()
-        val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single()
+    fun getCharacter(characterId: String): CharacterSheet? {
+        val cacheKey = "character_sheet:$characterId"
 
-        val skills = CharacterSkills.select { CharacterSkills.characterId eq characterId }.map {
-            SkillProficiency(
-                it[CharacterSkills.characterId],
-                it[CharacterSkills.skillName],
-                it[CharacterSkills.stat],
-                Proficiency.valueOf(it[CharacterSkills.proficiency])
-            )
+        // 1. Check Redis Cache first
+        val cached = RedisService.get(cacheKey)
+        if (cached != null) {
+            println("⚡ CACHE HIT! Returning character $characterId from Redis.")
+            return Json.decodeFromString<CharacterSheet>(cached)
         }
 
-        val spells = CharacterSpellSlots.select { CharacterSpellSlots.characterId eq characterId }.map {
-            SpellSlot(
-                it[CharacterSpellSlots.characterId],
-                it[CharacterSpellSlots.level],
-                it[CharacterSpellSlots.maximum],
-                it[CharacterSpellSlots.current]
-            )
+        println("⏳ CACHE MISS. Fetching character $characterId from DB...")
+
+        // 2. If not in cache, query PostgreSQL
+        val sheet = transaction {
+            val characterRow = Characters.select { Characters.id eq characterId }.singleOrNull() ?: return@transaction null
+            val statsRow = CharacterStats.select { CharacterStats.characterId eq characterId }.single()
+            val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single()
+
+            val skills = CharacterSkills.select { CharacterSkills.characterId eq characterId }.map {
+                SkillProficiency(
+                    it[CharacterSkills.characterId],
+                    it[CharacterSkills.skillName],
+                    it[CharacterSkills.stat],
+                    Proficiency.valueOf(it[CharacterSkills.proficiency])
+                )
+            }
+
+            val spells = CharacterSpellSlots.select { CharacterSpellSlots.characterId eq characterId }.map {
+                SpellSlot(
+                    it[CharacterSpellSlots.characterId],
+                    it[CharacterSpellSlots.level],
+                    it[CharacterSpellSlots.maximum],
+                    it[CharacterSpellSlots.current]
+                )
+            }
+
+            val inventory = CharacterInventory.select { CharacterInventory.characterId eq characterId }.map {
+                InventoryEntry(
+                    it[CharacterInventory.id],
+                    it[CharacterInventory.characterId],
+                    it[CharacterInventory.itemName],
+                    it[CharacterInventory.quantity],
+                    it[CharacterInventory.equipped],
+                    it[CharacterInventory.attuned],
+                    it[CharacterInventory.notes]
+                )
+            }
+
+            buildSheet(characterRow.toCharacter(), statsRow.toStats(), hpRow.toHitPoints(), skills, spells, inventory)
         }
 
-        val inventory = CharacterInventory.select { CharacterInventory.characterId eq characterId }.map {
-            InventoryEntry(
-                it[CharacterInventory.id],
-                it[CharacterInventory.characterId],
-                it[CharacterInventory.itemName],
-                it[CharacterInventory.quantity],
-                it[CharacterInventory.equipped],
-                it[CharacterInventory.attuned],
-                it[CharacterInventory.notes]
-            )
+        // 3. Save the result back to Redis for 1 hour (3600 seconds)
+        if (sheet != null) {
+            RedisService.set(cacheKey, Json.encodeToString(sheet), 3600)
         }
 
-        buildSheet(characterRow.toCharacter(), statsRow.toStats(), hpRow.toHitPoints(), skills, spells, inventory)
+        return sheet
     }
 
     fun getCharactersByUser(userId: String): List<CharacterSheet> = transaction {
@@ -201,55 +225,74 @@ object CharacterService {
 
     // ── Update ─────────────────────────────────────────────────────────────
 
-    fun updateHitPoints(characterId: String, newCurrent: Int): HitPoints = transaction {
-        val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.singleOrNull()
-            ?: throw NoSuchElementException("Character not found")
-        val max = hpRow[CharacterHitPoints.maximum]
-        val safeCurrent = newCurrent.coerceIn(0, max)
+    fun updateHitPoints(characterId: String, newCurrent: Int): HitPoints {
+        val updatedHp = transaction {
+            val hpRow = CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.singleOrNull()
+                ?: throw NoSuchElementException("Character not found")
+            val max = hpRow[CharacterHitPoints.maximum]
+            val safeCurrent = newCurrent.coerceIn(0, max)
 
-        CharacterHitPoints.update({ CharacterHitPoints.characterId eq characterId }) {
-            it[current] = safeCurrent
+            CharacterHitPoints.update({ CharacterHitPoints.characterId eq characterId }) {
+                it[current] = safeCurrent
+            }
+            CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single().toHitPoints()
         }
-        CharacterHitPoints.select { CharacterHitPoints.characterId eq characterId }.single().toHitPoints()
+        
+        // Wipe the stale character sheet from the cache!
+        RedisService.delete("character_sheet:$characterId")
+        
+        return updatedHp
     }
 
     fun updateCharacter(
         characterId: String, userId: String, name: String? = null, alignment: String? = null,
         subclass: String? = null, experiencePoints: Int? = null,
-    ): CharacterSheet = transaction {
-        val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
-            ?: throw NoSuchElementException("Character not found")
-        if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
+    ): CharacterSheet {
+        transaction {
+            val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
+                ?: throw NoSuchElementException("Character not found")
+            if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
 
-        val newLevel = experiencePoints?.let { RulesEngine.levelFromXp(it) } ?: charRow[Characters.level]
+            val newLevel = experiencePoints?.let { RulesEngine.levelFromXp(it) } ?: charRow[Characters.level]
 
-        Characters.update({ Characters.id eq characterId }) {
-            if (name != null) it[Characters.name] = name
-            if (alignment != null) it[Characters.alignment] = alignment
-            if (subclass != null) it[Characters.subclass] = subclass
-            if (experiencePoints != null) it[Characters.experiencePoints] = experiencePoints
-            it[level] = newLevel
+            Characters.update({ Characters.id eq characterId }) {
+                if (name != null) it[Characters.name] = name
+                if (alignment != null) it[Characters.alignment] = alignment
+                if (subclass != null) it[Characters.subclass] = subclass
+                if (experiencePoints != null) it[Characters.experiencePoints] = experiencePoints
+                it[level] = newLevel
+            }
         }
-        getCharacter(characterId)!!
+        
+        // We MUST delete the cache here BEFORE we call getCharacter() below, 
+        // otherwise it will just return the old cached version instead of the updated sheet!
+        RedisService.delete("character_sheet:$characterId")
+        
+        return getCharacter(characterId)!!
     }
 
     // ── Delete ─────────────────────────────────────────────────────────────
 
-    fun deleteCharacter(characterId: String, userId: String) = transaction {
-        val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
-            ?: throw NoSuchElementException("Character not found")
-        if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
+    fun deleteCharacter(characterId: String, userId: String) {
+        transaction {
+            val charRow = Characters.select { Characters.id eq characterId }.singleOrNull()
+                ?: throw NoSuchElementException("Character not found")
+            if (charRow[Characters.userId] != userId) throw IllegalAccessException("You don't own this character")
 
-        // Manually cascade deletes to child tables
-        CharacterStats.deleteWhere { CharacterStats.characterId eq characterId }
-        CharacterHitPoints.deleteWhere { CharacterHitPoints.characterId eq characterId }
-        CharacterDeathSaves.deleteWhere { CharacterDeathSaves.characterId eq characterId }
-        CharacterSkills.deleteWhere { CharacterSkills.characterId eq characterId }
-        CharacterSpellSlots.deleteWhere { CharacterSpellSlots.characterId eq characterId }
-        CharacterInventory.deleteWhere { CharacterInventory.characterId eq characterId }
+            // Manually cascade deletes to child tables
+            CharacterStats.deleteWhere { CharacterStats.characterId eq characterId }
+            CharacterHitPoints.deleteWhere { CharacterHitPoints.characterId eq characterId }
+            CharacterDeathSaves.deleteWhere { CharacterDeathSaves.characterId eq characterId }
+            CharacterSkills.deleteWhere { CharacterSkills.characterId eq characterId }
+            CharacterSpellSlots.deleteWhere { CharacterSpellSlots.characterId eq characterId }
+            CharacterInventory.deleteWhere { CharacterInventory.characterId eq characterId }
 
-        // Finally, delete the parent
-        Characters.deleteWhere { Characters.id eq characterId }
+            // Finally, delete the parent
+            Characters.deleteWhere { Characters.id eq characterId }
+        }
+        
+        // Remove the ghost sheet from memory
+        RedisService.delete("character_sheet:$characterId")
     }
 
     // ── Sheet Builder & Helpers ────────────────────────────────────────────

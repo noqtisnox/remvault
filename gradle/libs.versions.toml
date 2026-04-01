@@ -10,6 +10,7 @@ postgres = "42.7.3"
 hikari = "5.1.0"
 
 junit = "4.13.2"
+jedis = "5.1.2"
 
 [libraries]
 # Server Libraries
@@ -36,7 +37,7 @@ hikaricp = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 # Client Libraries
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }
-
+jedis-client = { module = "redis.clients:jedis", version.ref = "jedis" }
 
 # Ktor Client
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }

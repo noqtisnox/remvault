@@ -38,5 +38,7 @@ dependencies {
     implementation(libs.postgres.driver)
     implementation(libs.hikaricp)
 
+    implementation(libs.jedis.client)
+
     implementation(project(":shared"))
 }

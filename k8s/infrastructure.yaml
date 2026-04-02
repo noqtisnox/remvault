@@ -29,6 +29,19 @@ spec:
   ports:
   - port: 6379
 
+# --- POSTGRES STORAGE CLAIM ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
 # --- POSTGRES DATABASE ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56,6 +69,15 @@ spec:
           value: remvault
         ports:
         - containerPort: 5432
+        # 1. Mount the volume inside the container
+        volumeMounts:
+        - name: pgdata-storage
+          mountPath: /var/lib/postgresql/data
+      # 2. Tell the pod to use the PVC we created above
+      volumes:
+      - name: pgdata-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
 ---
 apiVersion: v1
 kind: Service

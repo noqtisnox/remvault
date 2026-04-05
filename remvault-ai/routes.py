@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from schemas import RulesRequest, HomebrewRequest, SessionRequest
+from schemas import RulesRequest, HomebrewRequest, SessionRequest, ChatRequest
 import llm_service
 
 
@@ -36,3 +36,25 @@ async def summarize_session(req: SessionRequest):
     
     response = llm_service.generate_dnd_response(system_prompt, f"DM Notes: {req.notes}", max_tokens=400)
     return {"response": response}
+
+
+@router.post("/chat")
+async def companion_chat(req: ChatRequest):
+    """
+    A testing route to check how UI interaction with LLM works
+
+    :param req: User request to the LLM
+    :return: LLM's response
+    """
+    # Dynamically build the persona based on the character's sheet!
+    system_prompt = (
+        f"You are a helpful D&D 5e companion advising a Level {req.context.level} "
+        f"{req.context.character_class} named {req.context.name}. "
+        "Keep your answers concise, flavorful, and strictly adhere to official 5e rules. "
+        "Address the character directly by name occasionally."
+    )
+
+    # Generate the response
+    response = llm_service.generate_dnd_response(system_prompt, f"User: {req.message}")
+
+    return {"reply": response}

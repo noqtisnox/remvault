@@ -65,4 +65,9 @@ export const api = {
   dice: {
     roll: (data) => request("POST", "/dice/roll", data),
   },
+
+  // ── LLM ────────────────────────────────────────────────────────────────
+  ai: {
+    ask: (data) => request("POST", "/ai/chat", data),
+  },
 };

@@ -7,6 +7,8 @@ plugins {
 group = "dev.remvault"
 version = "0.0.1"
 
+val ktor_version = "3.4.0"
+
 application {
     mainClass = "io.ktor.server.netty.EngineMain"
 }
@@ -16,6 +18,10 @@ kotlin {
 }
 
 dependencies {
+    implementation("io.ktor:ktor-client-core:${ktor_version}")
+    implementation("io.ktor:ktor-client-cio:${ktor_version}")
+    implementation("io.ktor:ktor-client-content-negotiation:${ktor_version}")
+
     implementation(libs.ktor.server.call.logging)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.host.common)

@@ -2,10 +2,11 @@
 
 echo "🛑 Stopping RemVault Kubernetes Cluster..."
 
-# Delete all resources defined in the k8s folder
-kubectl delete -f k8s/
+# Delete Deployments and Services, but LEAVE the PersistentVolumeClaims alone!
+kubectl delete deployments --all
+kubectl delete services --all
 
 echo "======================================================="
-echo "✅ Cluster resources deleted."
+echo "✅ Cluster applications and network routes deleted."
 echo "💾 Database storage (postgres-pvc) is safe and preserved."
 echo "======================================================="

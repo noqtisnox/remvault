@@ -1,0 +1,16 @@
+language: "en-US"
+reviews:
+  profile: "assertive"
+  high_level_summary: true
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+chat:
+  auto_reply: true
+custom_instructions:
+  - "This is a monorepo consisting of a Kotlin/Ktor backend ('server/'), a Python/FastAPI AI microservice ('remvault-ai/'), and a React/Vite frontend ('web/')."
+  - "Primary Goal: Aggressive but safe refactoring. Always suggest ways to make code more modular, DRY, and aligned with SOLID principles."
+  - "React Frontend: Actively suggest breaking down large monolith components into smaller, reusable components. Enforce proper React hook dependency arrays."
+  - "Kotlin Backend: Ensure idiomatic Kotlin, effective use of Coroutines, and clean routing separation."
+  - "Python AI: Ensure efficient memory handling and strict type-hinting with Pydantic."

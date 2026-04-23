@@ -58,19 +58,19 @@ object CampaignService {
     }
 
     fun getCampaign(campaignId: String): Campaign = transaction {
-        Campaigns.select { Campaigns.id eq campaignId }
+        Campaigns.selectAll().where { Campaigns.id eq campaignId }
             .map { it.toCampaign() }
             .singleOrNull() ?: throw NoSuchElementException("Campaign not found")
     }
 
     fun getCampaignsByMaster(masterId: String): List<Campaign> = transaction {
-        Campaigns.select { Campaigns.masterId eq masterId }
+        Campaigns.selectAll().where { Campaigns.masterId eq masterId }
             .map { it.toCampaign() }
     }
 
     fun getCampaignsByPlayer(userId: String): List<Campaign> = transaction {
         (Campaigns innerJoin CampaignMembers)
-            .select { CampaignMembers.userId eq userId }
+            .selectAll().where { CampaignMembers.userId eq userId }
             .map { it.toCampaign() }
     }
 
@@ -117,7 +117,7 @@ object CampaignService {
 
     fun getMembers(campaignId: String): List<CampaignMember> = transaction {
         getCampaign(campaignId) // validates existence
-        CampaignMembers.select { CampaignMembers.campaignId eq campaignId }
+        CampaignMembers.selectAll().where { CampaignMembers.campaignId eq campaignId }
             .map { it.toCampaignMember() }
     }
 
@@ -151,12 +151,12 @@ object CampaignService {
 
     fun getSessions(campaignId: String): List<Session> = transaction {
         getCampaign(campaignId) // validates existence
-        Sessions.select { Sessions.campaignId eq campaignId }
+        Sessions.selectAll().where { Sessions.campaignId eq campaignId }
             .map { it.toSession() }
     }
 
     fun getSession(campaignId: String, sessionId: String): Session = transaction {
-        Sessions.select { (Sessions.campaignId eq campaignId) and (Sessions.id eq sessionId) }
+        Sessions.selectAll().where { (Sessions.campaignId eq campaignId) and (Sessions.id eq sessionId) }
             .map { it.toSession() }
             .singleOrNull() ?: throw NoSuchElementException("Session not found")
     }
@@ -190,13 +190,13 @@ object CampaignService {
     // ── Helpers ────────────────────────────────────────────────────────────
 
     fun isMember(campaignId: String, userId: String): Boolean = transaction {
-        CampaignMembers.select {
+        CampaignMembers.selectAll().where {
             (CampaignMembers.campaignId eq campaignId) and (CampaignMembers.userId eq userId)
         }.count() > 0
     }
 
     fun isMaster(campaignId: String, userId: String): Boolean = transaction {
-        Campaigns.select {
+        Campaigns.selectAll().where {
             (Campaigns.id eq campaignId) and (Campaigns.masterId eq userId)
         }.count() > 0
     }

@@ -60,11 +60,10 @@ fun Route.aiRoutes() {
                 // Send Python's answer back to React
                 call.respond(HttpStatusCode.OK, pythonResponse)
             } catch (e: Exception) {
-                // By passing 'e' as the second argument, Ktor will print the full red stack trace!
-                application.environment.log.error("AI Service connection failed", e) 
-                
+                application.environment.log.error("AI Service connection failed", e)
+
                 call.respond(
-                    HttpStatusCode.InternalServerError, 
+                    HttpStatusCode.InternalServerError,
                     mapOf("reply" to "The DM is currently asleep. (Could not reach AI service)")
                 )
             }

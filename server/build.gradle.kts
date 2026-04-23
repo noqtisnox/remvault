@@ -37,6 +37,8 @@ dependencies {
 
     testImplementation(libs.ktor.server.test.host)
     testImplementation(libs.kotlin.test.junit)
+    // H2 in-memory database for unit tests
+    testImplementation("com.h2database:h2:2.2.220")
 
     implementation(libs.exposed.core)
     implementation(libs.exposed.dao)
@@ -45,6 +47,9 @@ dependencies {
     implementation(libs.hikaricp)
 
     implementation(libs.jedis.client)
+
+    // Argon2 for secure password hashing
+    implementation("de.mkammerer:argon2-jvm:2.11")
 
     implementation(project(":shared"))
 }

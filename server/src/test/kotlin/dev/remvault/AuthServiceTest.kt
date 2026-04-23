@@ -1,5 +1,6 @@
 package dev.remvault
 
+import dev.testutils.TestDatabase
 import dev.remvault.server.services.AuthService
 import dev.remvault.shared.enums.UserRole
 import kotlin.test.*
@@ -8,7 +9,10 @@ class AuthServiceTest {
 
     // Reset state between tests since AuthService is a singleton
     @BeforeTest
-    fun reset() = AuthService.reset()
+    fun reset() {
+        TestDatabase.init()
+        AuthService.reset()
+    }
 
     // ── register() ─────────────────────────────────────────────────────────
 
@@ -24,6 +28,8 @@ class AuthServiceTest {
     fun `register hashes password`() {
         val user = AuthService.register("thorin", "thorin@test.com", "password123", UserRole.MASTER)
         assertNotEquals("password123", user.passwordHash)
+        // Verify that the stored hash can validate the password
+        assertTrue(user.passwordHash.isNotEmpty())
     }
 
     @Test

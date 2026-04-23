@@ -36,3 +36,5 @@ web/node_modules
 remvault-ai/__pycache__/
 remvault-ai/venv/
 remvault-ai/models/
+
+.env.local

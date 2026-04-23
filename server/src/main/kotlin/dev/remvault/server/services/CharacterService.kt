@@ -343,4 +343,15 @@ object CharacterService {
         SkillProficiency(characterId, "Stealth", "dexterity", Proficiency.NONE),
         SkillProficiency(characterId, "Survival", "wisdom", Proficiency.NONE),
     )
+
+    // ── Test Support ───────────────────────────────────────────────
+    fun reset() = transaction {
+        CharacterInventory.deleteAll()
+        CharacterSpellSlots.deleteAll()
+        CharacterSkills.deleteAll()
+        CharacterDeathSaves.deleteAll()
+        CharacterHitPoints.deleteAll()
+        CharacterStats.deleteAll()
+        Characters.deleteAll()
+    }
 }

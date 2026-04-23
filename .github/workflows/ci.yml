@@ -27,7 +27,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build and Run Tests
-        run: ./gradlew build
+        run: ./gradlew --no-daemon -Dkotlin.compiler.execution.strategy=in-process -Dorg.gradle.workers.max=1 build
 
   # ── PYTHON AI MICROSERVICE ──────────────────────────────────────
   test-ai:

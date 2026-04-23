@@ -6,19 +6,23 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 object RedisService {
-    private val useMock: Boolean = (System.getProperty("redis.mock") ?: "false").toBoolean()
+    private val redisHost = System.getenv("REDIS_HOST") ?: "127.0.0.1"
 
     private data class Entry(val value: String, val expiresAt: Long)
 
-    // In-memory mock store for tests
-    private val mockStore: ConcurrentHashMap<String, Entry>? = if (useMock) ConcurrentHashMap() else null
+    // Dynamic flag so tests can set System.setProperty("redis.mock") before calling
+    private val useMock: Boolean
+        get() = (System.getProperty("redis.mock") ?: "false").toBoolean()
 
-    private val redisHost = System.getenv("REDIS_HOST") ?: "127.0.0.1"
-    private val pool: JedisPool? = if (!useMock) JedisPool(JedisPoolConfig(), redisHost, 6379) else null
+    // Always-available in-memory store (used when useMock==true)
+    private val mockStore = ConcurrentHashMap<String, Entry>()
+
+    // Lazy Jedis pool — only created when first used (and when not mocking)
+    private val pool by lazy { JedisPool(JedisPoolConfig(), redisHost, 6379) }
 
     fun get(key: String): String? {
         if (useMock) {
-            val e = mockStore?.get(key) ?: return null
+            val e = mockStore[key] ?: return null
             if (e.expiresAt > 0 && System.currentTimeMillis() > e.expiresAt) {
                 mockStore.remove(key)
                 return null
@@ -26,7 +30,7 @@ object RedisService {
             return e.value
         }
 
-        pool!!.resource.use { jedis ->
+        pool.resource.use { jedis ->
             return jedis.get(key)
         }
     }
@@ -34,22 +38,22 @@ object RedisService {
     fun set(key: String, value: String, expireSeconds: Long = 3600) {
         if (useMock) {
             val expiresAt = if (expireSeconds > 0) System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(expireSeconds) else 0L
-            mockStore?.put(key, Entry(value, expiresAt))
+            mockStore[key] = Entry(value, expiresAt)
             return
         }
 
-        pool!!.resource.use { jedis ->
+        pool.resource.use { jedis ->
             jedis.setex(key, expireSeconds, value)
         }
     }
 
     fun delete(key: String) {
         if (useMock) {
-            mockStore?.remove(key)
+            mockStore.remove(key)
             return
         }
 
-        pool!!.resource.use { jedis ->
+        pool.resource.use { jedis ->
             jedis.del(key)
         }
     }

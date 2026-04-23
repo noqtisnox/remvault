@@ -53,3 +53,18 @@ dependencies {
 
     implementation(project(":shared"))
 }
+
+// Test task configuration to avoid Kotlin daemon / test result races on CI
+tasks.withType<Test> {
+    systemProperty("redis.mock", "true")
+    maxParallelForks = 1
+    jvmArgs("-Dkotlin.compiler.execution.strategy=in-process")
+    // Remove any stale in-progress binary results that can cause NoSuchFileException
+    doFirst {
+        val binDir = file("$buildDir/test-results/test/binary")
+        if (binDir.exists()) {
+            binDir.listFiles()?.forEach { it.delete() }
+        }
+    }
+}
+
